@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>冷凍空調故障診斷助手 V1.0</title>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#dbe3ee;--blue:#2563eb;--blue2:#eff6ff;--red:#dc2626;--amber:#d97706;--green:#15803d}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+header{background:#0f172a;color:white;padding:18px 16px 20px;position:sticky;top:0;z-index:5}
+header h1{font-size:21px;margin:0 0 4px} header p{margin:0;color:#cbd5e1;font-size:13px}
+main{max-width:760px;margin:auto;padding:12px 12px 40px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin:10px 0;box-shadow:0 2px 10px #0f172a0a}
+h2{font-size:16px;margin:0 0 12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:13px;font-weight:700;color:#334155} input,select{width:100%;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;background:#fff;color:var(--ink)}
+button{border:0;border-radius:12px;padding:13px 16px;font-size:16px;font-weight:800;cursor:pointer}.primary{background:var(--blue);color:#fff;width:100%}.secondary{background:#e2e8f0;color:#0f172a}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.metric{border:1px solid var(--line);border-radius:12px;padding:11px;background:#f8fafc}.metric .k{font-size:12px;color:var(--muted)}.metric .v{font-size:21px;font-weight:850;margin-top:3px}
+.status{padding:12px;border-radius:12px;background:var(--blue2);border:1px solid #bfdbfe;margin-top:10px}.status strong{font-size:16px}
+.diag{border-left:5px solid var(--amber);background:#fffbeb;padding:12px;border-radius:10px;margin:9px 0}.diag.red{border-color:var(--red);background:#fef2f2}.diag.green{border-color:var(--green);background:#f0fdf4}
+.diag h3{margin:0 0 5px;font-size:15px}.diag p{margin:4px 0;font-size:13px}.bar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:7px 0}.bar i{display:block;height:100%;background:var(--amber);width:50%}
+ul{margin:7px 0 0 20px;padding:0;font-size:13px} li{margin:4px 0}.note{font-size:12px;color:var(--muted);line-height:1.55}
+.tag{display:inline-block;padding:3px 7px;border-radius:99px;font-size:11px;font-weight:800;background:#e2e8f0;margin:2px}
+footer{font-size:11px;color:var(--muted);text-align:center;padding:10px 4px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
+@media print{header{position:static}.actions,.inputCard{display:none!important}body{background:#fff}.card{box-shadow:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>❄️ 冷凍空調故障診斷助手 V1.0</h1>
+  <p>壓力 → 飽和溫度 → 過熱/過冷 → 故障規則交叉判斷</p>
+</header>
+
+<main>
+<section class="card inputCard">
+<h2>① 冷媒與系統</h2>
+<div class="grid">
+<label>冷媒<select id="ref">
+<option value="R410A">R410A</option><option value="R32">R32</option><option value="R22">R22</option>
+<option value="R134a">R134a</option><option value="R407C">R407C</option>
+</select></label>
+<label>系統<select id="system"><option>一般冷氣</option><option>冷藏/冷凍</option><option>商用冷凍</option><option>汽車空調</option></select></label>
+<label>膨脹裝置<select id="exp"><option value="TXV">TXV 熱力膨脹閥</option><option value="EEV">EEV 電子膨脹閥</option><option value="CAP">毛細管</option><option value="OTHER">其他</option></select></label>
+<label>運轉時間<select id="runtime"><option value="short">剛啟動 / < 10 分鐘</option><option value="stable" selected>穩定運轉 / ≥ 10 分鐘</option></select></label>
+</div>
+</section>
+
+<section class="card inputCard">
+<h2>② 現場量測</h2>
+<div class="grid">
+<label>低壓（psig）<input id="lp" type="number" step="0.1" placeholder="例如 118"></label>
+<label>高壓（psig）<input id="hp" type="number" step="0.1" placeholder="例如 365"></label>
+<label>吸氣管溫度 °C<input id="suct" type="number" step="0.1" placeholder="例如 12.5"></label>
+<label>液管溫度 °C<input id="liq" type="number" step="0.1" placeholder="例如 38"></label>
+<label>壓縮機排氣 °C<input id="dis" type="number" step="0.1" placeholder="例如 82"></label>
+<label>室外環境 °C<input id="ambient" type="number" step="0.1" placeholder="例如 32"></label>
+<label>回風 °C<input id="returnAir" type="number" step="0.1" placeholder="例如 27"></label>
+<label>出風 °C<input id="supplyAir" type="number" step="0.1" placeholder="例如 14"></label>
+</div>
+<p class="note">壓力請輸入「錶壓 psig」，不是絕對壓力。R407C 的吸氣過熱使用露點、液管過冷使用泡點。</p>
+</section>
+
+<section class="card inputCard">
+<div class="actions"><button class="primary" onclick="diagnose()">🔍 開始診斷</button><button class="secondary" onclick="demo()">載入示範數據</button></div>
+</section>
+
+<section id="result" class="hidden">
+<section class="card">
+<h2>③ 計算結果</h2>
+<div class="metrics" id="metrics"></div>
+<div id="warning"></div>
+</section>
+<section class="card">
+<h2>④ 故障診斷</h2>
+<div id="diagnosis"></div>
+</section>
+<section class="card">
+<h2>⑤ 建議檢查順序</h2>
+<div id="checks"></div>
+</section>
+<section class="card">
+<h2>⑥ 工程判斷說明</h2>
+<div id="explain"></div>
+</section>
+<section class="card inputCard"><button class="secondary" style="width:100%" onclick="window.print()">🖨️ 列印 / 儲存 PDF</button></section>
+</section>
+
+<footer>
+V1.0 為現場診斷輔助工具，不取代設備原廠資料、銘牌充填量、設計工況或合格技師判斷。
+</footer>
+</main>
+
+<script>
+/* PT points are field-reference data in psig. Values are interpolated linearly.
+   Sources cross-checked against published PT charts; see notes at bottom. */
+const PT={
+R22:[[-20,17.9],[-15,25.4],[-10,33.9],[-5,43.4],[0,54.0],[5,65.9],[10,79.1],[15,93.6],[20,109.7],[25,127.4],[30,146.8],[35,168.0],[40,191.1],[45,216.2],[50,243.4],[55,272.8],[60,304.6],[65,338.9],[70,375.9]],
+R32:[[-20,58.8],[0,117.9],[20,213.9],[40,359.4],[60,570.5]],
+R410A:[[-17.8,48.2],[-12.2,63.9],[-6.7,82.3],[-1.1,103.6],[4.4,130.9],[10,155.0],[15.6,182.2],[21.1,213.0],[26.7,254.6],[32.2,295.0],[37.8,340.2],[43.3,390.4],[48.9,446.0],[54.4,475.9]],
+R134a:[[-6.7,7.4],[-4.4,9.3],[-1.1,12.0],[1.7,15.0],[4.4,18.0],[7.8,22.0],[10,26.0],[15,40.0],[20,61.3],[25,71.4],[30,82.5],[35,94.7],[40,108.0],[45,122.6],[50,138.5],[55,155.9],[60,174.8],[65,195.4],[70,217.8]],
+R407C:{bubble:[[-20,23.9],[-15,33.3],[-10,44.0],[-5,56.0],[0,69.5],[5,84.5],[10,101.1],[15,119.5],[20,139.7],[25,161.9],[30,186.1],[35,212.6],[40,241.4],[45,272.7],[50,306.5],[55,343.0],[60,382.3]],
+dew:[[-20,35.2],[-15,46.0],[-10,58.3],[-5,72.1],[0,87.5],[5,104.6],[10,123.6],[15,144.5],[20,167.5],[25,192.6],[30,220.1],[35,250.0],[40,282.5],[45,317.6],[50,355.5],[55,396.3],[60,440.0]]}
+};
+
+function interp(arr,p){
+ if(p< arr[0][1] || p>arr[arr.length-1][1]) return null;
+ for(let i=1;i<arr.length;i++){
+  if(p<=arr[i][1]){let [t0,p0]=arr[i-1],[t1,p1]=arr[i];return t0+(p-p0)*(t1-t0)/(p1-p0);}
+ }
+ return null;
+}
+function pt(ref, p, mode="single"){
+ if(ref==="R407C") return interp(PT.R407C[mode],p);
+ return interp(PT[ref],p);
+}
+function n(v){return Number.isFinite(v)?v:null}
+function fmt(v,u="°C"){return v==null?"—":v.toFixed(1)+" "+u}
+function val(id){return parseFloat(document.getElementById(id).value)}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function addMetric(k,v){return `<div class="metric"><div class="k">${k}</div><div class="v">${v}</div></div>`}
+
+function diagnose(){
+ const ref=document.getElementById("ref").value;
+ const exp=document.getElementById("exp").value;
+ const runtime=document.getElementById("runtime").value;
+ const lp=val("lp"),hp=val("hp"),suct=val("suct"),liq=val("liq"),dis=val("dis"),amb=val("ambient"),ra=val("returnAir"),sa=val("supplyAir");
+ if([lp,hp,suct,liq,dis].some(x=>!Number.isFinite(x))){alert("請至少輸入：低壓、高壓、吸氣管溫度、液管溫度、排氣溫度。");return}
+ const evap=pt(ref,lp,ref==="R407C"?"dew":"single");
+ const cond=pt(ref,hp,ref==="R407C"?"bubble":"single");
+ if(evap==null||cond==null){alert("壓力超出目前 V1.0 的 PT 資料範圍，請確認單位或輸入值。");return}
+ const sh=suct-evap, sc=cond-liq, td=dis-cond;
+ const ratio=(hp+14.696)/(lp+14.696);
+ const deltaT=(Number.isFinite(ra)&&Number.isFinite(sa))?ra-sa:null;
+
+ document.getElementById("result").classList.remove("hidden");
+ document.getElementById("metrics").innerHTML=
+ addMetric("蒸發飽和溫度",fmt(evap))+
+ addMetric("冷凝飽和溫度",fmt(cond))+
+ addMetric("過熱度 SH",fmt(sh,"K"))+
+ addMetric("過冷度 SC",fmt(sc,"K"))+
+ addMetric("排氣溫度",fmt(dis))+
+ addMetric("排氣超熱 ΔT",fmt(td,"K"))+
+ addMetric("壓縮比",ratio.toFixed(2))+
+ addMetric("回風－出風 ΔT",fmt(deltaT,"K"));
+
+ const notes=[];
+ if(runtime==="short") notes.push("系統尚未穩定，SH/SC 與壓力判斷可信度會下降；建議達到穩定工況後重測。");
+ if(ref==="R32") notes.push("R32 為 A2L 冷媒；實際維修、回收與充填請依設備及當地法規與安全程序。");
+ if(ref==="R407C") notes.push("R407C 有明顯溫度滑移：V1.0 已用露點計算 SH、泡點計算 SC。");
+ document.getElementById("warning").innerHTML=notes.map(x=>`<div class="status">⚠ ${x}</div>`).join("");
+
+ // Baseline ranges are intentionally broad field-screening thresholds, not equipment-specific specs.
+ const scores={refrigerant:0,restriction:0,overcharge:0,condenser:0,evapAir:0,highLoad:0,compressor:0,expansion:0};
+ const reasons={};
+ function hit(k,pts,txt){scores[k]+=pts;(reasons[k]??=[]).push(txt)}
+ // Typical diagnostic patterns, only applied as screening heuristics.
+ if(sh>=12 && sc<=5){hit("refrigerant",4,"高過熱 + 低過冷，符合供液不足/低充填的典型組合");}
+ if(sh>=12 && sc>=8){hit("restriction",4,"高過熱 + 明顯過冷，較像液側限制、濾乾器/液管阻塞或膨脹裝置限制");hit("expansion",2,"高過熱顯示蒸發器末端供液不足");}
+ if(sh<=4 && sc>=10 && hp>200){hit("overcharge",3,"低過熱 + 高過冷，且高壓偏高，可能有過充或冷凝器有效容積受限");}
+ if(hp>280 && dis>=95){hit("condenser",4,"高側壓力與排氣溫度偏高，需優先檢查冷凝器散熱");}
+ if(Number.isFinite(amb) && cond-amb>=15){hit("condenser",3,"冷凝溫度相對環境偏高，支持冷凝側散熱/風量問題");}
+ if(Number.isFinite(ra) && deltaT!=null && deltaT<6 && sh<6){hit("evapAir",2,"室內 ΔT 偏小且過熱偏低，需檢查蒸發器負荷、風量與液量控制");}
+ if(Number.isFinite(ra) && deltaT!=null && deltaT>14){hit("highLoad",2,"室內 ΔT 偏大，可能是高負荷、風量不足或換熱條件異常");}
+ if(dis>=110 || td>=60){hit("compressor",3,"排氣溫度過高，需檢查壓縮機回氣冷卻、供液不足、壓縮比與冷凝狀態");}
+ if(sh>=15 && exp!=="CAP"){hit("expansion",2,"過熱度很高，膨脹裝置開度/感溫元件/控制訊號值得優先檢查");}
+ if(lp<0 && ref!=="R134a"){hit("restriction",1,"低壓可能已接近真空區，需立即排除嚴重供液不足、堵塞或負荷不足");}
+ if(hp<150 && sh>=12 && sc<=5){hit("refrigerant",2,"高低側壓力同時偏低且過熱高、過冷低");}
+
+ const labels={
+ refrigerant:["冷媒不足／系統供液不足","冷媒量、洩漏與充填量"],
+ restriction:["液側限制／濾乾器或液管堵塞","濾乾器前後溫差、液管溫度、閥件"],
+ overcharge:["冷媒過充或冷凝器有效容積受限","銘牌充填量、液管過冷、冷凝器狀態"],
+ condenser:["冷凝器散熱不良／風量不足","冷凝器髒污、風扇、環境溫度、冷凝壓力"],
+ evapAir:["蒸發器風量/負荷異常","濾網、風扇、蒸發器結霜與回風"],
+ highLoad:["蒸發器負荷或風量異常","回風、出風、風量、結霜與熱負荷"],
+ compressor:["壓縮機/高壓比相關異常","閥片、壓縮效率、回氣冷卻、排氣溫度"],
+ expansion:["膨脹裝置供液不足或控制異常","TXV/EEV、感溫包、過濾器、控制訊號"]
+ };
+ const sorted=Object.entries(scores).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+ let html="";
+ if(!sorted.length){
+   html=`<div class="diag green"><h3>🟢 目前沒有明顯符合的典型故障模式</h3><p>這不代表系統一定正常。請與設備原廠設計工況、銘牌資料及實際負荷交叉確認。</p></div>`;
+ } else {
+   sorted.slice(0,5).forEach(([k,s],i)=>{
+    const pct=clamp(s/10*100,20,100);
+    const [name,next]=labels[k];
+    html+=`<div class="diag ${i===0?'red':''}"><h3>${i===0?'🔴 ':i===1?'🟠 ':'🟡 '}${i+1}. ${name}</h3><p>判斷強度：${"★".repeat(Math.min(5,Math.ceil(s/2)))}${"☆".repeat(Math.max(0,5-Math.ceil(s/2)))}</p><div class="bar"><i style="width:${pct}%"></i></div><p><b>依據：</b>${(reasons[k]||[]).join("；")}</p><p><b>優先檢查：</b>${next}</p></div>`;
+   });
+ }
+ document.getElementById("diagnosis").innerHTML=html;
+
+ const check=[];
+ if(sorted[0]) check.push("先確認壓力單位、量測位置與溫度探頭接觸是否正確。");
+ if(sh>=12) check.push("確認蒸發器出口過熱：再檢查膨脹裝置、濾網/濾乾器與冷媒充填量。");
+ if(sc>=8) check.push("確認液管是否有明顯溫降；若有，量測濾乾器前後溫差以排除限制。");
+ if(hp>280 || (Number.isFinite(amb)&&cond-amb>=15)) check.push("檢查冷凝器盤管潔淨度、風扇轉速/風量及環境散熱條件。");
+ if(dis>=110 || td>=60) check.push("高排氣溫度時不要只補冷媒；先確認冷凝壓力、吸氣過熱與壓縮機冷卻。");
+ if(Number.isFinite(deltaT) && deltaT>14) check.push("檢查蒸發器風量、濾網、結霜與室內熱負荷。");
+ if(!check.length) check.push("記錄穩定運轉後的壓力、管溫、環境溫度，再與原廠設計值比較。");
+ document.getElementById("checks").innerHTML="<ol>"+check.map(x=>`<li>${x}</li>`).join("")+"</ol>";
+
+ document.getElementById("explain").innerHTML=`
+ <p><b>過熱度 SH：</b>吸氣管實測溫度 − 蒸發飽和溫度。SH 高通常表示蒸發器出口較乾，原因可能是供液不足、限制或負荷/風量因素。</p>
+ <p><b>過冷度 SC：</b>冷凝飽和溫度 − 液管實測溫度。SC 高常見於液量偏多或液側受限，但必須配合高低壓與實際設備資料。</p>
+ <p><b>排氣溫度：</b>高排氣可能與高壓比、過熱過高、冷凝不良或壓縮機冷卻不足有關，不能單憑一個溫度值判定壓縮機損壞。</p>
+ <p><b>本 V1.0 的定位：</b>規則式「篩檢」而非自動認定故障。設備製造商的目標 SH/SC、環境條件、負荷與控制策略優先於通用門檻。</p>`;
+ window.scrollTo({top:document.getElementById("result").offsetTop-70,behavior:"smooth"});
+}
+function demo(){
+ document.getElementById("ref").value="R410A";
+ const d={lp:118,hp:365,suct:12.5,liq:38,dis:82,ambient:32,returnAir:27,supplyAir:14};
+ for(const [k,v] of Object.entries(d))document.getElementById(k).value=v;
+ diagnose();
+}
+</script>
+</body>
+</html>
